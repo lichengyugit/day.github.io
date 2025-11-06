@@ -2,28 +2,32 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <title>阳历 / 阴历（农历）互转</title>
+  <title>阳历 / 阴历（农历）互转 · 节气 · 节假日/黄历</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root { color-scheme: light dark; }
     body { font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial; margin: 0; padding: 24px; }
     h1 { font-size: 20px; margin: 0 0 16px; }
-    .wrap { display: grid; gap: 20px; grid-template-columns: 1fr; max-width: 880px; }
-    @media (min-width: 900px){ .wrap { grid-template-columns: 1fr 1fr; } }
+    h2 { font-size: 16px; margin: 0 0 10px; }
+    .grid { display: grid; gap: 16px; grid-template-columns: 1fr; max-width: 1100px; }
+    @media (min-width: 1000px){ .grid { grid-template-columns: 1fr 1fr; } }
     section { border: 1px solid #ddd; border-radius: 10px; padding: 16px; }
     label { display:block; margin: 8px 0 4px; font-weight: 600; }
-    input, select, button { padding: 8px; font-size: 14px; }
-    .row { display:flex; gap:10px; align-items: center; flex-wrap: wrap; }
-    .result { margin-top: 12px; padding: 10px; border-radius: 8px; background: rgba(125,125,125,.08); }
+    input, select { padding: 8px; font-size: 14px; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .result { margin-top: 10px; padding: 10px; border-radius: 8px; background: rgba(125,125,125,.08); }
     .muted { opacity: .75; font-size: 12px; }
-    .err { color: #c00; font-weight: 600; }
-    footer { margin-top: 16px; font-size: 12px; opacity: .7; }
-    code { background: rgba(125,125,125,.12); padding: 0 4px; border-radius: 4px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px dashed rgba(125,125,125,.3); padding: 6px 4px; text-align: left; }
+    .kvs { display:grid; grid-template-columns: 110px 1fr; gap: 6px 10px; }
+    .badge { display:inline-block; padding:2px 6px; border-radius: 6px; background: rgba(125,125,125,.18); margin-right: 6px; }
+    footer { margin-top: 16px; font-size: 12px; opacity:.7; }
   </style>
 </head>
 <body>
-  <h1>阳历 / 阴历（农历）互转</h1>
-  <div class="wrap">
+  <h1>阳历 / 阴历（农历）互转 · 节气 · 节假日/黄历</h1>
+
+  <div class="grid">
     <section>
       <h2>公历 → 农历</h2>
       <label for="solarDate">公历日期</label>
@@ -58,20 +62,41 @@
       <div class="result" id="lunar2solarResult">请选择农历日期</div>
       <div class="muted">注：仅当某年某月存在闰月时才可选择“闰月”。</div>
     </section>
+
+    <section>
+      <h2>节气</h2>
+      <div class="kvs">
+        <div>当日所处：</div><div id="termToday">—</div>
+        <div>上一节气：</div><div id="termPrev">—</div>
+        <div>下一节气：</div><div id="termNext">—</div>
+      </div>
+      <div class="result" id="termTableWrap">
+        <div class="muted">当年24节气</div>
+        <table id="termTable"><thead><tr><th>序</th><th>节气</th><th>日期</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <section>
+      <h2>节假日 / 黄历（简版）</h2>
+      <div class="kvs">
+        <div>公历节日</div><div id="solarFestivals">—</div>
+        <div>农历节日</div><div id="lunarFestivals">—</div>
+        <div>是否周末</div><div id="isWeekend">—</div>
+        <div>黄历宜</div><div id="yiList">—</div>
+        <div>黄历忌</div><div id="jiList">—</div>
+      </div>
+      <div class="muted" style="margin-top:8px;">
+        说明：节假日仅含常见节日（未包含调休/放假方案）；黄历宜/忌为通用生成，供参考。
+      </div>
+    </section>
   </div>
 
   <footer>
-    数据范围 1900–2100；算法为常用农历换算，个别历史边界日可能存在差异。
+    注：农历换算范围 1900–2100；节气为通用近似算法；节假日未含年度调休；黄历为简版常用宜/忌。
   </footer>
 
 <script>
-/**
- * 农历数据（1900-2100），每个元素的位表示当年的月大小与闰月信息。
- * 位含义：
- *  - 0x0FFFF: 12~13位表示12个月（或含闰月），1=30天，0=29天
- *  - 0x10000: 闰月天数标志，1=30天，0=29天
- *  - 0xF: 低 4 位表示闰月月份（0 表示无闰月）
- */
+/* ========== 农历换算（1900-2100） ========== */
 const lunarInfo = [
   0x04bd8,0x04ae0,0x0a570,0x054d5,0x0d260,0x0d950,0x16554,0x056a0,0x09ad0,0x055d2,
   0x04ae0,0x0a5b6,0x0a4d0,0x0d250,0x1d255,0x0b540,0x0d6a0,0x0ada2,0x095b0,0x14977,
@@ -92,20 +117,12 @@ const lunarInfo = [
   0x0a2e0,0x0d2e3,0x0c960,0x0d557,0x0d4a0,0x0da50,0x05d55,0x056a0,0x0a6d0,0x055d4,
   0x052d0,0x0a9b8,0x0a950,0x0b4a0,0x0b6a6,0x0ad50,0x055a0,0x0aba4,0x0a5b0,0x052b0,
   0x0b273,0x06930,0x07337,0x06aa0,0x0ad50,0x14b55,0x04b60,0x0a570,0x054e4,0x0d160,
-  0x0e968,0x0d520,0x0daa0,0x16aa6,0x056d0,0x04ae0,0x0a9d4,0x0a2d0,0x0d150,0x0f252,
-  0x0d520,0x0dd45,0x0b5a0,0x056d0,0x055b2,0x049b0,0x0a577,0x0a4b0,0x0aa50,0x1b255,
-  0x06d20,0x0ada0,0x14b63,0x09370,0x049f8,0x04970,0x064b0,0x168a6,0x0ea50,0x06b20,
-  0x1a6c4,0x0aae0,0x0a2e0,0x0d2e3,0x0c960,0x0d557,0x0d4a0,0x0da50,0x05d55,0x056a0,
-  0x0a6d0,0x055d4,0x052d0,0x0a9b8,0x0a950,0x0b4a0,0x0b6a6,0x0ad50,0x055a0,0x0aba4,
-  0x0a5b0,0x052b0,0x0b273,0x06930,0x07337,0x06aa0,0x0ad50,0x14b55,0x04b60,0x0a570,
-  0x054e4,0x0d160,0x0e968,0x0d520,0x0daa0,0x16aa6,0x056d0,0x04ae0,0x0a9d4,0x0a2d0,
-  0x0d150,0x0f252
-];
-// 上面数组为 1900-2100，共 201 项（最后一项为 2100 年）。
+  0x0e968,0x0d520,0x0daa0,0x16aa6,0x056d0,0x04ae0,0x0a9d4,0x0a2d0,0x0d150,0x0f252
+]; // 1900-2100 共 201 年
 
-const BASE_DATE = new Date(1900, 0, 31); // 1900-01-31（农历 1900-正月初一）
-const MIN_DATE = new Date(1900, 0, 31);
-const MAX_DATE = new Date(2100, 11, 31);
+const BASE_DATE = new Date(Date.UTC(1900,0,31));
+const MIN_DATE = new Date(Date.UTC(1900,0,31));
+const MAX_DATE = new Date(Date.UTC(2100,11,31));
 
 const cMonthName = ["正","二","三","四","五","六","七","八","九","十","冬","腊"];
 const cDayName = (d)=>{
@@ -117,192 +134,217 @@ const cDayName = (d)=>{
   return d === 30 ? "三十" : "三十";
 };
 
-function lYearDays(y){
-  let sum = 348; // 12*29
-  const idx = y - 1900;
-  let info = lunarInfo[idx];
-  for (let i=0x8000; i>0x8; i>>=1) sum += (info & i) ? 1 : 0;
-  return sum + leapDays(y);
-}
-function leapMonth(y){
-  return lunarInfo[y-1900] & 0xf;
-}
-function leapDays(y){
-  const lm = leapMonth(y);
-  if (lm === 0) return 0;
-  return (lunarInfo[y-1900] & 0x10000) ? 30 : 29;
-}
-function monthDays(y, m){
-  return (lunarInfo[y-1900] & (0x10000 >> m)) ? 30 : 29;
-}
+function lYearDays(y){ let sum=348,info=lunarInfo[y-1900]; for(let i=0x8000;i>0x8;i>>=1) sum+=(info&i)?1:0; return sum+leapDays(y); }
+function leapMonth(y){ return lunarInfo[y-1900]&0xf; }
+function leapDays(y){ const lm=leapMonth(y); if(!lm) return 0; return (lunarInfo[y-1900]&0x10000)?30:29; }
+function monthDays(y,m){ return (lunarInfo[y-1900] & (0x10000>>m))?30:29; }
 
 function solarToLunar(date){
-  if (!(date instanceof Date)) date = new Date(date);
-  if (isNaN(date)) throw new Error("非法日期");
-  if (date < MIN_DATE || date > MAX_DATE) throw new Error("超出换算范围");
-
-  let offset = Math.floor((date - BASE_DATE) / 86400000);
-  let y, m, temp;
-  for (y = 1900; y <= 2100 && offset > 0; y++) {
+  const dt = new Date(Date.UTC(
+    date.getUTCFullYear?.() ?? date.getFullYear(),
+    (date.getUTCMonth?.() ?? date.getMonth()),
+    (date.getUTCDate?.() ?? date.getDate())
+  ));
+  if (dt<MIN_DATE || dt>MAX_DATE) throw new Error("超出换算范围");
+  let offset = Math.floor((dt - BASE_DATE)/86400000);
+  let y, temp;
+  for (y=1900; y<=2100 && offset>=0; y++){
     temp = lYearDays(y);
-    offset -= temp;
-  }
-  if (offset < 0) { offset += temp; y--; }
-  const lunarYear = y;
-
-  const leap = leapMonth(lunarYear);
-  let isLeap = false;
-
-  for (m = 1; m <= 12 && offset >= 0; m++) {
-    temp = (leap > 0 && m === (leap + 1) && !isLeap) ? leapDays(lunarYear) : monthDays(lunarYear, m);
     if (offset < temp) break;
     offset -= temp;
-    if (leap > 0 && m === (leap + 1) && !isLeap) { // 处理闰月后重置
-      isLeap = true;
-      m--; // 回到闰月
-    } else {
-      isLeap = false;
-    }
   }
-
-  const lunarMonth = m;
-  const lunarDay = offset + 1;
-
-  return { year: lunarYear, month: lunarMonth, day: lunarDay, isLeap };
+  const lunarYear = y;
+  const leap = leapMonth(lunarYear);
+  let isLeap=false, m, md;
+  for (m=1; m<=12; m++){
+    md = (leap && m===(leap+1) && !isLeap) ? leapDays(lunarYear) : monthDays(lunarYear,m);
+    if (offset < md) break;
+    offset -= md;
+    if (leap && m===(leap+1) && !isLeap){ isLeap=true; m--; } else { isLeap=false; }
+  }
+  return { year:lunarYear, month:m, day:offset+1, isLeap };
 }
 
-function lunarToSolar(y, m, d, isLeap){
-  if (y < 1900 || y > 2100) throw new Error("年份超出范围");
+function lunarToSolar(y,m,d,isLeap){
+  if (y<1900 || y>2100) throw new Error("年份超出范围");
   const leap = leapMonth(y);
-  if (m < 1 || m > 12) throw new Error("月份非法");
-  if (isLeap) {
-    if (leap === 0 || leap !== m) throw new Error("该年该月无闰月");
-    if (d < 1 || d > leapDays(y)) throw new Error("闰月日期非法");
-  } else {
-    if (d < 1 || d > monthDays(y, m)) throw new Error("日期非法");
-  }
-
-  let offset = 0;
-  for (let i=1900; i<y; i++) offset += lYearDays(i);
-
-  // 前置月份天数
-  for (let i=1; i<m; i++) {
-    offset += monthDays(y, i);
-    if (i === leap) offset += leapDays(y); // 前面经过了闰月
-  }
-
-  if (isLeap) {
-    // 先跨过正常的该月，再加闰月天数内的偏移
-    offset += monthDays(y, m);
-    offset += (d - 1);
-  } else {
-    offset += (d - 1);
-  }
-
-  const dt = new Date(BASE_DATE.getTime() + offset*86400000);
-  if (dt < MIN_DATE || dt > MAX_DATE) throw new Error("超出换算范围");
-  return dt;
+  if (m<1 || m>12) throw new Error("月份非法");
+  if (isLeap){ if (!leap || leap!==m) throw new Error("该年该月无闰月"); if (d<1 || d>leapDays(y)) throw new Error("闰月日期非法"); }
+  else { if (d<1 || d>monthDays(y,m)) throw new Error("日期非法"); }
+  let offset=0;
+  for (let i=1900;i<y;i++) offset+=lYearDays(i);
+  for (let i=1;i<m;i++){ offset+=monthDays(y,i); if (i===leap) offset+=leapDays(y); }
+  if (isLeap) offset+=monthDays(y,m);
+  offset += (d-1);
+  const dt = new Date(BASE_DATE.getTime()+offset*86400000);
+  if (dt<MIN_DATE || dt>MAX_DATE) throw new Error("超出换算范围");
+  return new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()));
 }
 
-// 工具：格式化展示
-function fmtLunar({year, month, day, isLeap}){
-  const mName = cMonthName[(month-1) % 12] + "月";
-  const dayName = cDayName(day);
-  return `${year}年 ${isLeap ? "闰" : ""}${mName}${dayName}`;
-}
+function fmtLunar({year,month,day,isLeap}){ return `${year}年 ${isLeap?"闰":""}${cMonthName[(month-1)%12]}月${cDayName(day)}`; }
 function pad2(n){ return (n<10?'0':'')+n; }
-function fmtYmd(date){ return `${date.getFullYear()}-${pad2(date.getMonth()+1)}-${pad2(date.getDate())}`; }
+function fmtYmd(date){ return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth()+1)}-${pad2(date.getUTCDate())}`; }
 
-// 绑定 UI
+/* 干支年/生肖（用于展示） */
+const stems = ["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"];
+const branches = ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"];
+const animals = ["鼠","牛","虎","兔","龙","蛇","马","羊","猴","鸡","狗","猪"];
+function ganzhiYear(lunarYear){ return stems[(lunarYear-4)%10] + branches[(lunarYear-4)%12]; }
+function zodiac(lunarYear){ return animals[(lunarYear-4)%12]; }
+
+/* ========== 节气（24 Solar Terms） ========== */
+const solarTerms = ["小寒","大寒","立春","雨水","惊蛰","春分","清明","谷雨","立夏","小满","芒种","夏至","小暑","大暑","立秋","处暑","白露","秋分","寒露","霜降","立冬","小雪","大雪","冬至"];
+const sTermInfo = [0,21208,42467,63836,85337,107014,128867,150921,173149,195551,218072,240693,263343,285989,308563,331033,353350,375494,397447,419210,440795,462224,483532,504758];
+const TERM_BASE_UTC = Date.UTC(1900,0,6,2,5);
+function getTermDateUTC(y,n){ const off = 31556925974.7*(y-1900) + sTermInfo[n]*60000; return new Date(TERM_BASE_UTC+off); }
+function listTermsOfYear(y){
+  return solarTerms.map((name,i)=>{ const d=getTermDateUTC(y,i); return { idx:i, name, y:d.getUTCFullYear(), m:d.getUTCMonth()+1, d:d.getUTCDate(), dateUTC:d }; });
+}
+function findTermAround(y,m,d){
+  const dayUTC = Date.UTC(y,m-1,d);
+  const list = listTermsOfYear(y);
+  const prevYear = listTermsOfYear(y-1).slice(-2);
+  const nextYear = listTermsOfYear(y+1).slice(0,2);
+  const all = [...prevYear,...list,...nextYear].sort((a,b)=>a.dateUTC-b.dateUTC);
+  let prev=null,next=null,todayTerm=null;
+  for (let i=0;i<all.length;i++){
+    const t=all[i], tDayUTC=Date.UTC(t.y,t.m-1,t.d);
+    if (tDayUTC===dayUTC){ todayTerm=t; prev=all[i-1]||null; next=all[i+1]||null; break; }
+    if (tDayUTC>dayUTC){ next=t; prev=all[i-1]||null; break; }
+  }
+  if (!next) next=all[all.length-1];
+  if (!prev) prev=all[0];
+  return { todayTerm, prev, next, list };
+}
+
+/* ========== 节假日/黄历 ========== */
+// 常见公历节日
+const SOLAR_FEST = {
+  "01-01":"元旦", "02-14":"情人节", "03-08":"妇女节", "03-12":"植树节",
+  "04-01":"愚人节", "05-01":"劳动节", "06-01":"儿童节", "09-10":"教师节",
+  "10-01":"国庆节", "12-25":"圣诞节"
+};
+// 常见农历节日（月-日）
+const LUNAR_FEST = {
+  "1-1":"春节", "1-15":"元宵节", "2-2":"龙抬头", "5-5":"端午节",
+  "7-7":"七夕节", "8-15":"中秋节", "9-9":"重阳节", "12-30":"除夕" // 注：部分年份腊月29为除夕，此处简化
+};
+// 简版宜/忌词库
+const YI_POOL = ["祭祀","祈福","纳财","出行","嫁娶","开市","交易","移徙","入宅","安床","求医","修造","动土","栽种","纳畜","解除","订盟","破土","赴约","见长辈"];
+const JI_POOL = ["诉讼","词讼","上梁","开仓","出火","置产","入宅","开张","动土","安葬","伐木","作灶","造桥","远行","探病","分手","借贷","冲动消费"];
+
+// 稳定伪随机（按 yyyymmdd 生成）
+function hash32(str){ let h=2166136261>>>0; for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619);} h+=h<<13; h^=h>>>7; h+=h<<3; h^=h>>>17; h+=h<<5; return h>>>0; }
+function mulberry32(seed){ return function(){ let t=seed+=0x6D2B79F5; t=Math.imul(t^(t>>>15), t|1); t^=t+Math.imul(t^(t>>>7), t|61); return ((t^(t>>>14))>>>0)/4294967296; }; }
+function pickMany(rng, pool, n){
+  const arr = pool.map((v,i)=>({v, r:rng(), i})).sort((a,b)=>a.r-b.r).slice(0,n).map(x=>x.v);
+  return arr;
+}
+
+// 计算节日与黄历
+function calcHolidayAndHL(y,m,d,lunar){
+  const mmdd = `${pad2(m)}-${pad2(d)}`;
+  const solarHit = SOLAR_FEST[mmdd] ? [SOLAR_FEST[mmdd]] : [];
+  // 清明（按节气）
+  const yearTerms = listTermsOfYear(y);
+  const qingming = yearTerms[6]; // 索引6为清明
+  if (qingming.m === m && qingming.d === d) solarHit.push("清明节");
+
+  // 农历节日
+  const lkey = `${lunar.month}-${lunar.day}`;
+  const lunarHit = LUNAR_FEST[lkey] ? [LUNAR_FEST[lkey]] : [];
+  // 中秋/端午/春节等已覆盖；除夕简化为腊月三十（部分年份是二十九，此处未判断大小月）
+
+  // 是否周末
+  const isWeekend = (new Date(y, m-1, d).getDay() % 6 === 0); // 周六/周日
+
+  // 简版宜忌（按日期哈希稳定生成）
+  const rng = mulberry32(hash32(`${y}${pad2(m)}${pad2(d)}`));
+  const yi = pickMany(rng, YI_POOL, 5);
+  const ji = pickMany(rng, JI_POOL, 4);
+
+  return { solarHit, lunarHit, isWeekend, yi, ji };
+}
+
+/* 绑定 UI */
 const solarInput = document.getElementById("solarDate");
 const solarResult = document.getElementById("solar2lunarResult");
-
 const lYearSel = document.getElementById("lYear");
 const lMonthSel = document.getElementById("lMonth");
 const lLeapSel = document.getElementById("lLeap");
 const lDaySel = document.getElementById("lDay");
 const lunarResult = document.getElementById("lunar2solarResult");
+const termTodayEl = document.getElementById("termToday");
+const termPrevEl = document.getElementById("termPrev");
+const termNextEl = document.getElementById("termNext");
+const termTableBody = document.querySelector("#termTable tbody");
+
+const solarFestEl = document.getElementById("solarFestivals");
+const lunarFestEl = document.getElementById("lunarFestivals");
+const isWeekendEl = document.getElementById("isWeekend");
+const yiListEl = document.getElementById("yiList");
+const jiListEl = document.getElementById("jiList");
 
 function fillYearMonth(){
-  // 年
-  for (let y=1900; y<=2100; y++){
-    const opt = document.createElement("option");
-    opt.value = String(y); opt.textContent = y+"年";
-    lYearSel.appendChild(opt);
-  }
-  // 月
-  for (let m=1; m<=12; m++){
-    const opt = document.createElement("option");
-    opt.value = String(m); opt.textContent = `${cMonthName[m-1]}月(${m})`;
-    lMonthSel.appendChild(opt);
-  }
+  for (let y=1900;y<=2100;y++){ const o=document.createElement("option"); o.value=String(y); o.textContent=`${y}年`; lYearSel.appendChild(o); }
+  for (let m=1;m<=12;m++){ const o=document.createElement("option"); o.value=String(m); o.textContent=`${cMonthName[m-1]}月(${m})`; lMonthSel.appendChild(o); }
 }
 function refreshLeapAndDays(){
-  const y = parseInt(lYearSel.value,10);
-  const m = parseInt(lMonthSel.value,10);
-  const leapM = leapMonth(y);
-  const canLeap = (leapM === m);
-  lLeapSel.disabled = !canLeap;
-  if (!canLeap) lLeapSel.value = "0";
-
-  const useLeap = lLeapSel.value === "1";
-  const days = useLeap ? leapDays(y) : monthDays(y, m);
-  const cur = parseInt(lDaySel.value||"1",10);
-
-  lDaySel.innerHTML = "";
-  for (let d=1; d<=days; d++){
-    const opt = document.createElement("option");
-    opt.value = String(d); opt.textContent = `${cDayName(d)}(${d})`;
-    lDaySel.appendChild(opt);
-  }
-  if (cur <= days) lDaySel.value = String(cur);
+  const y=parseInt(lYearSel.value,10), m=parseInt(lMonthSel.value,10);
+  const leapM=leapMonth(y), canLeap=(leapM===m);
+  lLeapSel.disabled=!canLeap; if(!canLeap) lLeapSel.value="0";
+  const days=(lLeapSel.value==="1")?leapDays(y):monthDays(y,m);
+  const cur=parseInt(lDaySel.value||"1",10);
+  lDaySel.innerHTML="";
+  for(let d=1; d<=days; d++){ const o=document.createElement("option"); o.value=String(d); o.textContent=`${cDayName(d)}(${d})`; lDaySel.appendChild(o); }
+  if (cur<=days) lDaySel.value=String(cur);
 }
-
 function onSolarChange(){
-  const v = solarInput.value;
-  if (!v){ solarResult.textContent = "请选择日期"; return; }
-  const [y,m,d] = v.split("-").map(n=>parseInt(n,10));
+  const v=solarInput.value; if(!v){ solarResult.textContent="请选择日期"; return; }
+  const [y,m,d]=v.split("-").map(n=>parseInt(n,10));
   try{
-    const lunar = solarToLunar(new Date(y, m-1, d));
+    const lunar = solarToLunar(new Date(Date.UTC(y,m-1,d)));
+    const gz=ganzhiYear(lunar.year), zod=zodiac(lunar.year);
     solarResult.innerHTML = `<div>农历：<b>${fmtLunar(lunar)}</b></div>
-      <div class="muted">闰月：${lunar.isLeap ? "是" : "否"}</div>`;
-    // 反向控件跟随（方便试用）
-    lYearSel.value = String(lunar.year);
-    lMonthSel.value = String(lunar.month);
-    lLeapSel.value = lunar.isLeap ? "1" : "0";
-    refreshLeapAndDays();
-    lDaySel.value = String(lunar.day);
-  }catch(e){
-    solarResult.innerHTML = `<span class="err">${e.message}</span>`;
-  }
-}
+      <div>干支年：${gz}年　生肖：${zod}</div>
+      <div class="muted">闰月：${lunar.isLeap?"是":"否"}</div>`;
+    lYearSel.value=String(lunar.year); lMonthSel.value=String(lunar.month);
+    lLeapSel.value=lunar.isLeap?"1":"0"; refreshLeapAndDays(); lDaySel.value=String(lunar.day);
 
+    refreshTerms(y,m,d);
+    refreshHoliday(y,m,d,lunar);
+  }catch(e){ solarResult.innerHTML = `<span class="err">${e.message}</span>`; }
+}
 function onLunarChange(){
-  const y = parseInt(lYearSel.value,10);
-  const m = parseInt(lMonthSel.value,10);
-  const isLeap = lLeapSel.value === "1";
-  const d = parseInt(lDaySel.value,10);
+  const y=parseInt(lYearSel.value,10), m=parseInt(lMonthSel.value,10), isLeap=lLeapSel.value==="1", d=parseInt(lDaySel.value,10);
   try{
-    const date = lunarToSolar(y, m, d, isLeap);
-    lunarResult.innerHTML = `<div>公历：<b>${fmtYmd(date)}</b></div>`;
-  }catch(e){
-    lunarResult.innerHTML = `<span class="err">${e.message}</span>`;
-  }
+    const date=lunarToSolar(y,m,d,isLeap);
+    lunarResult.innerHTML=`<div>公历：<b>${fmtYmd(date)}</b></div>`;
+  }catch(e){ lunarResult.innerHTML=`<span class="err">${e.message}</span>`; }
+}
+function refreshTerms(y,m,d){
+  const { todayTerm, prev, next, list } = findTermAround(y,m,d);
+  termTodayEl.textContent = todayTerm ? `${todayTerm.name}（${todayTerm.m}-${pad2(todayTerm.d)}）` : "（当日不在节气交节日）";
+  termPrevEl.textContent = `${prev.name}（${prev.y}-${pad2(prev.m)}-${pad2(prev.d)}）`;
+  termNextEl.textContent = `${next.name}（${next.y}-${pad2(next.m)}-${pad2(next.d)}）`;
+  termTableBody.innerHTML="";
+  list.forEach((t,i)=>{ const tr=document.createElement("tr"); tr.innerHTML=`<td>${i+1}</td><td>${t.name}</td><td>${t.y}-${pad2(t.m)}-${pad2(t.d)}</td>`; termTableBody.appendChild(tr); });
+}
+function refreshHoliday(y,m,d,lunar){
+  const { solarHit, lunarHit, isWeekend, yi, ji } = calcHolidayAndHL(y,m,d,lunar);
+  solarFestEl.innerHTML = solarHit.length ? solarHit.map(x=>`<span class="badge">${x}</span>`).join("") : "—";
+  lunarFestEl.innerHTML = lunarHit.length ? lunarHit.map(x=>`<span class="badge">${x}</span>`).join("") : "—";
+  isWeekendEl.textContent = isWeekend ? "周末" : "工作日";
+  yiListEl.textContent = yi.join("、");
+  jiListEl.textContent = ji.join("、");
 }
 
-// 初始化
+/* 初始化 */
 (function init(){
-  // 填充下拉
-  fillYearMonth();
-  refreshLeapAndDays();
-
-  // 今日默认
-  const today = new Date();
-  // 限制可选范围（为简化：不强制 input 的 min/max，逻辑校验即可）
-  solarInput.value = fmtYmd(today < MIN_DATE ? MIN_DATE : (today > MAX_DATE ? MAX_DATE : today));
+  fillYearMonth(); refreshLeapAndDays();
+  const today=new Date(); const y=today.getFullYear(), m=today.getMonth()+1, d=today.getDate();
+  solarInput.value = `${y}-${pad2(m)}-${pad2(d)}`;
   onSolarChange();
-
-  // 事件
   solarInput.addEventListener("change", onSolarChange);
   lYearSel.addEventListener("change", ()=>{ refreshLeapAndDays(); onLunarChange(); });
   lMonthSel.addEventListener("change", ()=>{ refreshLeapAndDays(); onLunarChange(); });
